@@ -1,9 +1,10 @@
 import debounce from 'lodash.debounce';
+import type { DebouncedFunc } from 'lodash';
 
-export function createDebouncedFunction<T extends (...args: any[]) => any>(
+export function createDebouncedFunction<T extends (...args: unknown[]) => unknown>(
   func: T,
-  wait: number = 200
-): T {
-  return debounce(func, wait) as T;
+  wait = 200
+): DebouncedFunc<T> {
+  return debounce(func, wait);
 }
 
