@@ -1,10 +1,10 @@
 import debounce from 'lodash.debounce';
 import type { DebouncedFunc } from 'lodash';
 
-export function createDebouncedFunction<T extends (...args: unknown[]) => unknown>(
-  func: T,
+export function createDebouncedFunction<TArgs extends unknown[], TResult>(
+  func: (...args: TArgs) => TResult,
   wait = 200
-): DebouncedFunc<T> {
+): DebouncedFunc<(...args: TArgs) => TResult> {
   return debounce(func, wait);
 }
 
