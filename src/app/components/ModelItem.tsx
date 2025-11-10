@@ -1,11 +1,12 @@
 'use client'
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useGLTF, TransformControls } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../utils/store'
 import { saveModelState } from '../lib/firestoreApi'
 import { createDebouncedFunction } from '../utils/debounce'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 type Props = {
   url: string
@@ -20,6 +21,10 @@ export default function ModelItem({ url, id }: Props) {
   const updateModel = useAppStore((state) => state.updateModel)
   const setModelBoundingBox = useAppStore((state) => state.setModelBoundingBox)
   const allModels = useAppStore((state) => state.models)
+  const verticalMoveMode = useAppStore((state) => state.verticalMoveMode)
+  const [isReady, setIsReady] = useState(false)
+  const controls = useThree((state) => state.controls) as unknown as OrbitControlsImpl | null
+  const initialGroundYRef = useRef(0)
   
   const [previousPosition] = useState<THREE.Vector3>(new THREE.Vector3())
   const [previousRotation] = useState<THREE.Euler>(new THREE.Euler())
@@ -89,6 +94,23 @@ export default function ModelItem({ url, id }: Props) {
     
     const position = ref.current.position.clone()
     const rotation = ref.current.rotation.clone()
+
+    if (!verticalMoveMode) {
+      position.y = initialGroundYRef.current
+      ref.current.position.y = position.y
+    }
+
+    // Keep above ground: if any part dips below y=0, lift object up
+    const ensureAboveGround = (obj: THREE.Object3D) => {
+      const box = new THREE.Box3().setFromObject(obj)
+      const minY = box.min.y
+      if (minY < 0) {
+        const delta = -minY
+        obj.position.y += delta
+        position.y += delta
+      }
+    }
+    ensureAboveGround(ref.current)
     
     // Check for collision
     if (checkCollision(position)) {
@@ -113,26 +135,29 @@ export default function ModelItem({ url, id }: Props) {
       position: [position.x, position.y, position.z],
       rotation: [rotation.x, rotation.y, rotation.z],
     })
-  }, [id, updateModel, debouncedSave, checkCollision, previousPosition, previousRotation])
+  }, [id, updateModel, debouncedSave, checkCollision, previousPosition, previousRotation, verticalMoveMode])
 
   // Handle drag start
   const handleDragStart = useCallback(() => {
     if (ref.current) {
+      if (controls) controls.enabled = false
       previousPosition.copy(ref.current.position)
       previousRotation.copy(ref.current.rotation)
+      initialGroundYRef.current = ref.current.position.y
     }
-  }, [previousPosition, previousRotation])
+  }, [previousPosition, previousRotation, controls])
 
   // Handle drag end
   const handleDragEnd = useCallback(() => {
     handleChange()
-  }, [handleChange])
+    if (controls) controls.enabled = true
+  }, [handleChange, controls])
 
   // Clone the scene to avoid sharing between instances
   const clonedScene = useRef<THREE.Group | null>(null)
   
   useEffect(() => {
-    if (gltf?.scene && !clonedScene.current) {
+    if (gltf?.scene) {
       try {
         clonedScene.current = gltf.scene.clone()
         
@@ -144,8 +169,10 @@ export default function ModelItem({ url, id }: Props) {
         }
         
         console.log(`✅ Model ${id} processed and ready`)
+        setIsReady(true)
       } catch (error: any) {
         console.error(`❌ Error processing model ${id}:`, error)
+        setIsReady(false)
       }
     }
   }, [gltf?.scene, id])
@@ -154,7 +181,7 @@ export default function ModelItem({ url, id }: Props) {
     return null
   }
 
-  if (!gltf?.scene || !clonedScene.current) {
+  if (!gltf?.scene || !clonedScene.current || !isReady) {
     // Model is still loading - show nothing (Suspense will handle loading state)
     return null
   }
@@ -168,12 +195,13 @@ export default function ModelItem({ url, id }: Props) {
         ref={transformControlsRef}
         object={ref as React.MutableRefObject<THREE.Group>}
         mode="translate"
+        translationSnap={verticalMoveMode ? 0.05 : 0.1}
         onMouseDown={handleDragStart}
         onObjectChange={handleChange}
         onMouseUp={handleDragEnd}
-        showX={true}
+        showX={!verticalMoveMode}
         showY={true}
-        showZ={true}
+        showZ={!verticalMoveMode}
       />
     </>
   )

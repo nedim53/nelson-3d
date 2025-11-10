@@ -1,11 +1,12 @@
 'use client'
 import { useRef, useCallback, useEffect } from 'react'
 import { TransformControls } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../utils/store'
 import { saveModelState } from '../lib/firestoreApi'
 import { createDebouncedFunction } from '../utils/debounce'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 type Props = {
   id: string
@@ -21,9 +22,12 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
   const updateModel = useAppStore((state) => state.updateModel)
   const setModelBoundingBox = useAppStore((state) => state.setModelBoundingBox)
   const allModels = useAppStore((state) => state.models)
+  const verticalMoveMode = useAppStore((state) => state.verticalMoveMode)
   
   const previousPositionRef = useRef<THREE.Vector3>(new THREE.Vector3())
   const previousRotationRef = useRef<THREE.Euler>(new THREE.Euler())
+  const initialGroundYRef = useRef(0)
+  const controls = useThree((state) => state.controls) as unknown as OrbitControlsImpl | null
   
   // Debounced save function
   const debouncedSave = useCallback(
@@ -75,6 +79,23 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
     
     const position = ref.current.position.clone()
     const rotation = ref.current.rotation.clone()
+
+    if (!verticalMoveMode) {
+      position.y = initialGroundYRef.current
+      ref.current.position.y = position.y
+    }
+
+    // Keep above ground: lift if any part dips below y=0
+    const ensureAboveGround = (obj: THREE.Object3D) => {
+      const box = new THREE.Box3().setFromObject(obj)
+      const minY = box.min.y
+      if (minY < 0) {
+        const delta = -minY
+        obj.position.y += delta
+        position.y += delta
+      }
+    }
+    ensureAboveGround(ref.current)
     
     // Check for collision
     if (checkCollision(position)) {
@@ -99,20 +120,23 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
       position: [position.x, position.y, position.z],
       rotation: [rotation.x, rotation.y, rotation.z],
     })
-  }, [id, updateModel, debouncedSave, checkCollision])
+  }, [id, updateModel, debouncedSave, checkCollision, verticalMoveMode])
 
   // Handle drag start
   const handleDragStart = useCallback(() => {
     if (ref.current) {
+      if (controls) controls.enabled = false
       previousPositionRef.current.copy(ref.current.position)
       previousRotationRef.current.copy(ref.current.rotation)
+      initialGroundYRef.current = ref.current.position.y
     }
-  }, [])
+  }, [controls])
 
   // Handle drag end
   const handleDragEnd = useCallback(() => {
     handleChange()
-  }, [handleChange])
+    if (controls) controls.enabled = true
+  }, [handleChange, controls])
 
   if (!modelState) {
     return null
@@ -144,12 +168,13 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
         ref={transformControlsRef}
         object={ref as React.MutableRefObject<THREE.Mesh>}
         mode="translate"
+        translationSnap={verticalMoveMode ? 0.05 : 0.1}
         onMouseDown={handleDragStart}
         onObjectChange={handleChange}
         onMouseUp={handleDragEnd}
-        showX={true}
+        showX={!verticalMoveMode}
         showY={true}
-        showZ={true}
+        showZ={!verticalMoveMode}
       />
     </>
   )

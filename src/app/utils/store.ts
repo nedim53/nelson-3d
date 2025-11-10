@@ -12,7 +12,9 @@ export interface ModelData {
 interface AppState {
   viewMode: ViewMode;
   models: Record<string, ModelData>;
+  verticalMoveMode: boolean;
   setViewMode: (mode: ViewMode) => void;
+  setVerticalMoveMode: (on: boolean) => void;
   updateModel: (id: string, data: Partial<ModelData>) => void;
   setModelBoundingBox: (id: string, box: THREE.Box3) => void;
   initializeModel: (id: string, position: [number, number, number], rotation: [number, number, number]) => void;
@@ -21,8 +23,10 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
   viewMode: '3d',
   models: {},
+  verticalMoveMode: false,
   
   setViewMode: (mode) => set({ viewMode: mode }),
+  setVerticalMoveMode: (on) => set({ verticalMoveMode: on }),
   
   updateModel: (id, data) => set((state) => ({
     models: {
