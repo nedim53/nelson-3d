@@ -1,11 +1,14 @@
 'use client'
-import { useRef, useCallback, useEffect } from 'react'
+import { useRef, useCallback, useEffect, useState } from 'react'
 import { TransformControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../utils/store'
 import { saveModelState } from '../lib/firestoreApi'
 import { createDebouncedFunction } from '../utils/debounce'
+import { checkModelCollision } from '../utils/collisionDetection'
+import CollisionTooltip from './CollisionTooltip'
+import { useUndoRedoContext } from '../contexts/UndoRedoContext'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 type Props = {
@@ -23,6 +26,9 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
   const setModelBoundingBox = useAppStore((state) => state.setModelBoundingBox)
   const allModels = useAppStore((state) => state.models)
   const verticalMoveMode = useAppStore((state) => state.verticalMoveMode)
+  const [isColliding, setIsColliding] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const { saveCurrentState } = useUndoRedoContext()
   
   const previousPositionRef = useRef<THREE.Vector3>(new THREE.Vector3())
   const previousRotationRef = useRef<THREE.Euler>(new THREE.Euler())
@@ -53,25 +59,20 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
     }
   })
 
-  // Collision detection
-  const checkCollision = useCallback((position: THREE.Vector3): boolean => {
+  // Check collision and update visual feedback
+  const checkCollisionAndUpdateFeedback = useCallback((position: THREE.Vector3): boolean => {
     if (!ref.current) return false
     
     const tempMesh = ref.current.clone()
     tempMesh.position.copy(position)
     
     const candidateBox = new THREE.Box3().setFromObject(tempMesh)
+    const hasCollision = checkModelCollision(candidateBox, id, allModels)
     
-    // Check against all other models
-    for (const [otherId, otherModel] of Object.entries(allModels)) {
-      if (otherId === id) continue
-      if (otherModel.boundingBox && candidateBox.intersectsBox(otherModel.boundingBox)) {
-        return true
-      }
-    }
+    setIsColliding(hasCollision && isDragging)
     
-    return false
-  }, [allModels, id])
+    return hasCollision
+  }, [allModels, id, isDragging])
 
   // Handle transform change
   const handleChange = useCallback(() => {
@@ -97,8 +98,8 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
     }
     ensureAboveGround(ref.current)
     
-    // Check for collision
-    if (checkCollision(position)) {
+    // Check for collision and update feedback
+    if (checkCollisionAndUpdateFeedback(position)) {
       // Rollback to previous position
       ref.current.position.copy(previousPositionRef.current)
       ref.current.rotation.copy(previousRotationRef.current)
@@ -120,12 +121,13 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
       position: [position.x, position.y, position.z],
       rotation: [rotation.x, rotation.y, rotation.z],
     })
-  }, [id, updateModel, debouncedSave, checkCollision, verticalMoveMode])
+  }, [id, updateModel, debouncedSave, checkCollisionAndUpdateFeedback, verticalMoveMode])
 
   // Handle drag start
   const handleDragStart = useCallback(() => {
     if (ref.current) {
       if (controls) controls.enabled = false
+      setIsDragging(true)
       previousPositionRef.current.copy(ref.current.position)
       previousRotationRef.current.copy(ref.current.rotation)
       initialGroundYRef.current = ref.current.position.y
@@ -135,8 +137,12 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
   // Handle drag end
   const handleDragEnd = useCallback(() => {
     handleChange()
+    setIsDragging(false)
+    setIsColliding(false)
+    // Save state to history for undo/redo
+    saveCurrentState()
     if (controls) controls.enabled = true
-  }, [handleChange, controls])
+  }, [handleChange, controls, saveCurrentState])
 
   if (!modelState) {
     return null
@@ -162,8 +168,11 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
     <>
       <mesh ref={ref}>
         {renderGeometry()}
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={isColliding ? '#DC2626' : color} />
       </mesh>
+      {isColliding && ref.current && (
+        <CollisionTooltip position={ref.current.position} visible={true} />
+      )}
       <TransformControls
         ref={transformControlsRef}
         object={ref as React.MutableRefObject<THREE.Mesh>}

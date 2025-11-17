@@ -44,7 +44,7 @@ export default function RotationControls({ modelId }: Props) {
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
       <div className="bg-[#001B3D] px-6 py-4 border-b-4 border-[#C41E3A]">
-        <h3 className="font-bold text-lg text-white font-sans">Rotacija Modela</h3>
+        <h3 className="font-bold text-lg text-white font-sans">Model Rotation</h3>
         <p className="text-gray-300 text-sm font-light">ID: {modelId}</p>
       </div>
 

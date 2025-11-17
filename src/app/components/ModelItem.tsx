@@ -6,6 +6,9 @@ import * as THREE from 'three'
 import { useAppStore } from '../utils/store'
 import { saveModelState } from '../lib/firestoreApi'
 import { createDebouncedFunction } from '../utils/debounce'
+import { checkModelCollision } from '../utils/collisionDetection'
+import CollisionTooltip from './CollisionTooltip'
+import { useUndoRedoContext } from '../contexts/UndoRedoContext'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 type Props = {
@@ -25,9 +28,15 @@ export default function ModelItem({ url, id }: Props) {
   const [isReady, setIsReady] = useState(false)
   const controls = useThree((state) => state.controls) as unknown as OrbitControlsImpl | null
   const initialGroundYRef = useRef(0)
+  const [isColliding, setIsColliding] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const { saveCurrentState } = useUndoRedoContext()
   
   const [previousPosition] = useState<THREE.Vector3>(new THREE.Vector3())
   const [previousRotation] = useState<THREE.Euler>(new THREE.Euler())
+  
+  // Store original colors for collision feedback
+  const originalColorsRef = useRef<Map<THREE.Material, THREE.Color>>(new Map())
   
   // Load GLTF/GLB model - useGLTF handles loading with Suspense
   // Note: useGLTF supports both .gltf and .glb formats
@@ -66,8 +75,8 @@ export default function ModelItem({ url, id }: Props) {
     }
   })
 
-  // Collision detection
-  const checkCollision = useCallback((position: THREE.Vector3): boolean => {
+  // Check collision and update visual feedback
+  const checkCollisionAndUpdateFeedback = useCallback((position: THREE.Vector3): boolean => {
     if (!ref.current) return false
     
     // Create temporary box at new position
@@ -76,17 +85,12 @@ export default function ModelItem({ url, id }: Props) {
     tempGroup.position.copy(position)
     
     const candidateBox = new THREE.Box3().setFromObject(tempGroup)
+    const hasCollision = checkModelCollision(candidateBox, id, allModels)
     
-    // Check against all other models
-    for (const [otherId, otherModel] of Object.entries(allModels)) {
-      if (otherId === id) continue
-      if (otherModel.boundingBox && candidateBox.intersectsBox(otherModel.boundingBox)) {
-        return true
-      }
-    }
+    setIsColliding(hasCollision && isDragging)
     
-    return false
-  }, [allModels, id])
+    return hasCollision
+  }, [allModels, id, isDragging])
 
   // Handle transform change
   const handleChange = useCallback(() => {
@@ -112,8 +116,8 @@ export default function ModelItem({ url, id }: Props) {
     }
     ensureAboveGround(ref.current)
     
-    // Check for collision
-    if (checkCollision(position)) {
+    // Check for collision and update feedback
+    if (checkCollisionAndUpdateFeedback(position)) {
       // Rollback to previous position
       ref.current.position.copy(previousPosition)
       ref.current.rotation.copy(previousRotation)
@@ -135,12 +139,13 @@ export default function ModelItem({ url, id }: Props) {
       position: [position.x, position.y, position.z],
       rotation: [rotation.x, rotation.y, rotation.z],
     })
-  }, [id, updateModel, debouncedSave, checkCollision, previousPosition, previousRotation, verticalMoveMode])
+  }, [id, updateModel, debouncedSave, checkCollisionAndUpdateFeedback, previousPosition, previousRotation, verticalMoveMode])
 
   // Handle drag start
   const handleDragStart = useCallback(() => {
     if (ref.current) {
       if (controls) controls.enabled = false
+      setIsDragging(true)
       previousPosition.copy(ref.current.position)
       previousRotation.copy(ref.current.rotation)
       initialGroundYRef.current = ref.current.position.y
@@ -150,8 +155,12 @@ export default function ModelItem({ url, id }: Props) {
   // Handle drag end
   const handleDragEnd = useCallback(() => {
     handleChange()
+    setIsDragging(false)
+    setIsColliding(false)
+    // Save state to history for undo/redo
+    saveCurrentState()
     if (controls) controls.enabled = true
-  }, [handleChange, controls])
+  }, [handleChange, controls, saveCurrentState])
 
   // Clone the scene to avoid sharing between instances
   const clonedScene = useRef<THREE.Group | null>(null)
@@ -177,6 +186,38 @@ export default function ModelItem({ url, id }: Props) {
     }
   }, [gltf?.scene, id])
 
+  // Apply red tint to materials when colliding (store original colors)
+  useEffect(() => {
+    if (!clonedScene.current) return
+    
+    clonedScene.current.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh
+        if (mesh.material) {
+          const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+          materials.forEach((mat) => {
+            if ('color' in mat && mat instanceof THREE.MeshStandardMaterial) {
+              // Store original color on first access
+              if (!originalColorsRef.current.has(mat)) {
+                originalColorsRef.current.set(mat, mat.color.clone())
+              }
+              
+              // Apply red tint when colliding, restore original when not
+              if (isColliding) {
+                mat.color.set('#DC2626')
+              } else {
+                const originalColor = originalColorsRef.current.get(mat)
+                if (originalColor) {
+                  mat.color.copy(originalColor)
+                }
+              }
+            }
+          })
+        }
+      }
+    })
+  }, [isColliding])
+
   if (!modelState) {
     return null
   }
@@ -191,6 +232,9 @@ export default function ModelItem({ url, id }: Props) {
       <group ref={ref}>
         <primitive object={clonedScene.current} />
       </group>
+      {isColliding && ref.current && (
+        <CollisionTooltip position={ref.current.position} visible={true} />
+      )}
       <TransformControls
         ref={transformControlsRef}
         object={ref as React.MutableRefObject<THREE.Group>}

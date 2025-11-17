@@ -28,9 +28,9 @@ function SceneContent({
     <>
       {/* Camera */}
       {viewMode === "3d" ? (
-        <PerspectiveCamera makeDefault position={[10, 10, 10]} fov={50} />
+        <PerspectiveCamera makeDefault position={[6, 6, 6]} fov={45} />
       ) : (
-        <OrthographicCamera makeDefault position={[0, 20, 0]} rotation={[-Math.PI / 2, 0, 0]} zoom={50} />
+        <OrthographicCamera makeDefault position={[0, 15, 0]} rotation={[-Math.PI / 2, 0, 0]} zoom={80} />
       )}
 
       {/* Lights */}

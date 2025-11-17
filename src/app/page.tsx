@@ -5,6 +5,7 @@ import CanvasWrapper from "./components/CanvasWrapper"
 import ControlsUI from "./components/ControlsUI"
 import { useAppStore } from "./utils/store"
 import { loadModelState } from "./lib/firestoreApi"
+import { UndoRedoProvider } from "./contexts/UndoRedoContext"
 
 const USE_SIMPLE_MODELS = false
 
@@ -64,7 +65,7 @@ export default function Home() {
         await Promise.all(loadPromises)
       } catch (err) {
         console.error("Error loading models:", err)
-        setError("Greška pri učitavanju modela iz baze podataka")
+        setError("Error loading models from the database")
 
         MODEL_IDS.forEach((id) => {
           initializeModel(id, DEFAULT_POSITIONS[id] || [0, 0, 0], DEFAULT_ROTATIONS[id] || [0, 0, 0])
@@ -97,10 +98,10 @@ export default function Home() {
             ></div>
           </div>
           <h2 className="text-2xl font-bold mb-2" style={{ color: "#001B3D", fontFamily: "Montserrat" }}>
-            Učitavanje modela
+            Loading models
           </h2>
           <p className="text-sm font-light" style={{ color: "#718096", fontFamily: "Montserrat" }}>
-            Molim vas, pričekajte...
+            Please wait...
           </p>
           <div className="flex justify-center gap-1 mt-6">
             {[...Array(3)].map((_, i) => (
@@ -140,21 +141,21 @@ export default function Home() {
             </svg>
           </div>
           <h3 className="text-xl font-bold mb-2 text-center" style={{ color: "#2D3748", fontFamily: "Montserrat" }}>
-            Greška pri učitavanju
+            Loading error
           </h3>
           <p className="text-sm text-center mb-4 font-light" style={{ color: "#718096", fontFamily: "Montserrat" }}>
             {error}
           </p>
           <div className="pt-4 border-t" style={{ borderColor: "#E2E8F0" }}>
             <p className="text-xs font-light" style={{ color: "#718096", fontFamily: "Montserrat" }}>
-              Provjerite Firebase konfiguraciju u{" "}
+              Check your Firebase configuration in{" "}
               <code
                 className="px-2 py-1 rounded text-xs font-mono inline-block mt-2"
                 style={{ backgroundColor: "#F7FAFC", color: "#2D3748" }}
               >
                 .env.local
               </code>{" "}
-              fajlu.
+              file.
             </p>
           </div>
         </div>
@@ -163,8 +164,9 @@ export default function Home() {
   }
 
   return (
-    <div className="relative w-full h-screen overflow-hidden flex flex-col">
-      <header className="bg-[#001B3D] text-white px-6 py-4 shadow-md">
+    <UndoRedoProvider>
+      <div className="relative w-full h-screen overflow-hidden flex flex-col">
+        <header className="bg-[#001B3D] text-white px-6 py-4 shadow-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <h1 className="text-2xl font-bold tracking-wide" style={{ fontFamily: "Montserrat" }}>
             NELSON CABINETRY
@@ -210,19 +212,20 @@ export default function Home() {
                 className="text-xs mt-1 font-light leading-relaxed"
                 style={{ color: "#78350F", fontFamily: "Montserrat" }}
               >
-                Koristiš Three.js oblike za testiranje. Postavi{" "}
+                You're using Three.js primitive shapes for testing. Set{" "}
                 <code
                   className="inline-block px-2 py-1 rounded text-xs font-mono mt-1"
                   style={{ backgroundColor: "#FCD34D", color: "#001B3D" }}
                 >
                   USE_SIMPLE_MODELS = false
                 </code>{" "}
-                kada dodaš GLB modele.
+                when you add GLB models.
               </p>
             </div>
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </UndoRedoProvider>
   )
 }

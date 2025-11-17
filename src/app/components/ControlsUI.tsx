@@ -1,6 +1,7 @@
 "use client"
 import { useAppStore } from "../utils/store"
 import RotationControls from "./RotationControls"
+import { useUndoRedoContext } from "../contexts/UndoRedoContext"
 
 type ControlsUIProps = {
   modelIds: string[]
@@ -11,12 +12,13 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
   const setViewMode = useAppStore((state) => state.setViewMode)
   const verticalMoveMode = useAppStore((state) => state.verticalMoveMode)
   const setVerticalMoveMode = useAppStore((state) => state.setVerticalMoveMode)
+  const { undo, redo, canUndo, canRedo } = useUndoRedoContext()
 
   return (
     <div className="flex flex-col h-full">
       <div className="bg-[#001B3D] px-6 py-4 sticky top-0 z-10 flex-shrink-0">
         <h2 className="text-white font-bold text-lg tracking-wide" style={{ fontFamily: "Montserrat" }}>
-          Kontrole
+          Controls
         </h2>
       </div>
 
@@ -24,7 +26,7 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
         {/* View Mode Toggle */}
         <div>
           <label className="block text-sm font-semibold text-[#2D3748] mb-3" style={{ fontFamily: "Montserrat" }}>
-            Prikaz:
+            View:
           </label>
           <div className="flex gap-3">
             <button
@@ -51,7 +53,7 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
         {/* Vertical move toggle */}
         <div>
           <label className="block text-sm font-semibold text-[#2D3748] mb-3" style={{ fontFamily: "Montserrat" }}>
-            Vertikalno pomjeranje (Y):
+            Vertical movement (Y):
           </label>
           <button
             onClick={() => setVerticalMoveMode(!verticalMoveMode)}
@@ -60,11 +62,44 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
             }`}
             style={{ fontFamily: "Montserrat" }}
           >
-            {verticalMoveMode ? "✓ Uključeno" : "Isključeno"}
+            {verticalMoveMode ? "✓ On" : "Off"}
           </button>
           <p className="text-xs text-gray-500 mt-2" style={{ fontFamily: "Montserrat" }}>
-            {verticalMoveMode ? "Lakše gore/dole" : "Samo po podu (X/Z)"}
+            {verticalMoveMode ? "Easier up/down" : "Ground plane only (X/Z)"}
           </p>
+        </div>
+
+        {/* Undo/Redo Controls */}
+        <div>
+          <label className="block text-sm font-semibold text-[#2D3748] mb-3" style={{ fontFamily: "Montserrat" }}>
+            History:
+          </label>
+          <div className="flex gap-3">
+            <button
+              onClick={undo}
+              disabled={!canUndo}
+              className={`flex-1 px-4 py-2.5 rounded font-medium transition-all duration-200 ${
+                canUndo
+                  ? "bg-[#001B3D] text-white shadow-md hover:bg-[#002b5d]"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+              style={{ fontFamily: "Montserrat" }}
+            >
+              ↶ Undo
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo}
+              className={`flex-1 px-4 py-2.5 rounded font-medium transition-all duration-200 ${
+                canRedo
+                  ? "bg-[#001B3D] text-white shadow-md hover:bg-[#002b5d]"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+              style={{ fontFamily: "Montserrat" }}
+            >
+              ↷ Redo
+            </button>
+          </div>
         </div>
 
         {/* Instructions */}
@@ -74,15 +109,15 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
               <span className="text-[#001B3D]">Drag:</span>
             </p>
             <p className="text-xs text-gray-600" style={{ fontFamily: "Montserrat" }}>
-              Koristi transform kontrolu (žuti gizmo) za pomicanje modela.
+              Use the transform control (yellow gizmo) to move models.
             </p>
           </div>
           <div>
             <p className="text-sm font-semibold text-[#2D3748] mb-1" style={{ fontFamily: "Montserrat" }}>
-              <span className="text-[#C41E3A]">Rotacija:</span>
+              <span className="text-[#C41E3A]">Rotation:</span>
             </p>
             <p className="text-xs text-gray-600" style={{ fontFamily: "Montserrat" }}>
-              Koristi kontrolu ispod za rotaciju modela.
+              Use the control below to rotate the model.
             </p>
           </div>
         </div>
