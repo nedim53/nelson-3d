@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { useAppStore } from '../utils/store'
 import { saveModelState } from '../lib/firestoreApi'
 import { createDebouncedFunction } from '../utils/debounce'
-import { checkModelCollision } from '../utils/collisionDetection'
+import { wouldCollide } from '../utils/collisionDetection'
 import CollisionTooltip from './CollisionTooltip'
 import { useUndoRedoContext } from '../contexts/UndoRedoContext'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
@@ -23,9 +23,10 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
   
   const modelState = useAppStore((state) => state.models[id])
   const updateModel = useAppStore((state) => state.updateModel)
-  const setModelBoundingBox = useAppStore((state) => state.setModelBoundingBox)
+  const setModelMesh = useAppStore((state) => state.setModelMesh)
   const allModels = useAppStore((state) => state.models)
   const verticalMoveMode = useAppStore((state) => state.verticalMoveMode)
+  const transformMode = useAppStore((state) => state.transformMode)
   const [isColliding, setIsColliding] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const { saveCurrentState } = useUndoRedoContext()
@@ -51,28 +52,49 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
     }
   }, [modelState])
 
-  // Update bounding box periodically
-  useFrame(() => {
+  // Save mesh reference to store when component mounts
+  useEffect(() => {
     if (ref.current) {
-      const box = new THREE.Box3().setFromObject(ref.current)
-      setModelBoundingBox(id, box)
+      setModelMesh(id, ref.current)
     }
-  })
+  }, [id, setModelMesh])
 
-  // Check collision and update visual feedback
-  const checkCollisionAndUpdateFeedback = useCallback((position: THREE.Vector3): boolean => {
-    if (!ref.current) return false
-    
-    const tempMesh = ref.current.clone()
-    tempMesh.position.copy(position)
-    
-    const candidateBox = new THREE.Box3().setFromObject(tempMesh)
-    const hasCollision = checkModelCollision(candidateBox, id, allModels)
-    
-    setIsColliding(hasCollision && isDragging)
-    
-    return hasCollision
-  }, [allModels, id, isDragging])
+  // Check collision and update visual feedback (with position and rotation)
+  const checkCollisionAndUpdateFeedback = useCallback(
+    (position: THREE.Vector3, rotation: THREE.Euler): boolean => {
+      if (!ref.current) return false
+      
+      // Prepare mesh data for all models
+      const allMeshes: Record<string, { 
+        mesh: THREE.Object3D, 
+        position: [number, number, number], 
+        rotation: [number, number, number] 
+      }> = {}
+      
+      for (const [modelId, modelData] of Object.entries(allModels)) {
+        if (modelData.mesh) {
+          allMeshes[modelId] = {
+            mesh: modelData.mesh,
+            position: modelData.position,
+            rotation: modelData.rotation
+          }
+        }
+      }
+      
+      // Check if the proposed position/rotation would cause collision
+      const hasCollision = wouldCollide(
+        ref.current,
+        [position.x, position.y, position.z],
+        [rotation.x, rotation.y, rotation.z],
+        id,
+        allMeshes
+      )
+      
+      setIsColliding(hasCollision && isDragging)
+      
+      return hasCollision
+    }, [allModels, id, isDragging]
+  )
 
   // Handle transform change
   const handleChange = useCallback(() => {
@@ -98,9 +120,9 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
     }
     ensureAboveGround(ref.current)
     
-    // Check for collision and update feedback
-    if (checkCollisionAndUpdateFeedback(position)) {
-      // Rollback to previous position
+    // Check for collision and update feedback (now includes rotation)
+    if (checkCollisionAndUpdateFeedback(position, rotation)) {
+      // Rollback to previous position AND rotation
       ref.current.position.copy(previousPositionRef.current)
       ref.current.rotation.copy(previousRotationRef.current)
       return
@@ -176,14 +198,15 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
       <TransformControls
         ref={transformControlsRef}
         object={ref as React.MutableRefObject<THREE.Mesh>}
-        mode="translate"
-        translationSnap={verticalMoveMode ? 0.05 : 0.1}
+        mode={transformMode}
+        translationSnap={transformMode === 'translate' ? (verticalMoveMode ? 0.05 : 0.1) : undefined}
+        rotationSnap={transformMode === 'rotate' ? Math.PI / 12 : undefined}
         onMouseDown={handleDragStart}
         onObjectChange={handleChange}
         onMouseUp={handleDragEnd}
-        showX={!verticalMoveMode}
+        showX={transformMode === 'translate' ? !verticalMoveMode : true}
         showY={true}
-        showZ={!verticalMoveMode}
+        showZ={transformMode === 'translate' ? !verticalMoveMode : true}
       />
     </>
   )

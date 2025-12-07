@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react"
 import CanvasWrapper from "./components/CanvasWrapper"
 import ControlsUI from "./components/ControlsUI"
+import TextBoxSidebar from "./components/TextBoxSidebar"
 import { useAppStore } from "./utils/store"
-import { loadModelState } from "./lib/firestoreApi"
+import { loadModelState, loadAllTextBoxes } from "./lib/firestoreApi"
 import { UndoRedoProvider } from "./contexts/UndoRedoContext"
 
 const USE_SIMPLE_MODELS = false
@@ -35,6 +36,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const initializeModel = useAppStore((state) => state.initializeModel)
+  const initializeTextBox = useAppStore((state) => state.initializeTextBox)
 
   useEffect(() => {
     async function loadModels() {
@@ -63,6 +65,26 @@ export default function Home() {
         })
 
         await Promise.all(loadPromises)
+        
+        // Load text boxes
+        try {
+          const textBoxes = await loadAllTextBoxes()
+          textBoxes.forEach((textBox) => {
+            initializeTextBox(textBox.id, {
+              id: textBox.id,
+              position: textBox.position,
+              text: textBox.text,
+              textColor: textBox.textColor,
+              backgroundColor: textBox.backgroundColor,
+              backgroundTransparent: textBox.backgroundTransparent,
+              fontSize: textBox.fontSize,
+              createdAt: textBox.createdAt?.toDate(),
+              updatedAt: textBox.updatedAt?.toDate(),
+            })
+          })
+        } catch (err) {
+          console.error("Error loading text boxes:", err)
+        }
       } catch (err) {
         console.error("Error loading models:", err)
         setError("Error loading models from the database")
@@ -76,7 +98,7 @@ export default function Home() {
     }
 
     loadModels()
-  }, [initializeModel])
+  }, [initializeModel, initializeTextBox])
 
   if (isLoading) {
     return (
@@ -177,25 +199,22 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="flex-1 flex gap-4 overflow-hidden bg-[#F7FAFC] p-4">
-        <div className="w-80 bg-white rounded-lg shadow-lg overflow-y-auto">
-          <ControlsUI modelIds={MODEL_IDS} />
-        </div>
-
-        <div className="flex-1 rounded-lg shadow-lg overflow-hidden">
+      <div className="flex-1 overflow-hidden bg-[#F7FAFC] relative">
+        {/* Canvas - Full width */}
+        <div className="w-full h-full rounded-lg shadow-xl overflow-hidden border border-gray-200">
           <CanvasWrapper
             modelUrls={USE_SIMPLE_MODELS ? {} : MODEL_URLS}
             useSimpleModels={USE_SIMPLE_MODELS}
             simpleModelsConfig={SIMPLE_MODELS_CONFIG}
           />
         </div>
-      </div>
 
-      <footer className="bg-[#001B3D] text-white px-6 py-3 text-center">
-        <p className="text-sm" style={{ fontFamily: "Montserrat", color: "#E2E8F0" }}>
-          © 2025 Nelson Cabinetry | Premium RTA Cabinets | Free 3D Kitchen Design
-        </p>
-      </footer>
+        {/* Controls Sidebar - Fixed overlay on the left */}
+        <ControlsUI modelIds={MODEL_IDS} />
+
+        {/* Text Box Sidebar - Fixed overlay on the right */}
+        <TextBoxSidebar />
+      </div>
 
       {USE_SIMPLE_MODELS && (
         <div

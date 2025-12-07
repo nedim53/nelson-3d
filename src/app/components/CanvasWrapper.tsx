@@ -1,15 +1,118 @@
 "use client"
-import { Canvas } from "@react-three/fiber"
+import { Canvas, useThree } from "@react-three/fiber"
 import { OrbitControls, Grid, PerspectiveCamera, OrthographicCamera, Environment } from "@react-three/drei"
-import { Suspense } from "react"
+import { Suspense, useEffect, useRef } from "react"
 import { useAppStore } from "../utils/store"
 import ModelItemWithErrorBoundary from "./ModelItemWithErrorBoundary"
 import SimpleModelItem from "./SimpleModelItem"
+import TextBox from "./TextBox"
+import * as THREE from "three"
+import { saveTextBox } from "../lib/firestoreApi"
 
 type CanvasWrapperProps = {
   modelUrls: Record<string, string>
   useSimpleModels?: boolean
   simpleModelsConfig?: Record<string, { shape: "box" | "sphere" | "cone" | "cylinder"; color: string }>
+}
+
+// Raycasting handler component - improved version
+function CanvasClickHandler() {
+  const { camera, gl, scene } = useThree()
+  const raycaster = useRef(new THREE.Raycaster())
+  const mouse = useRef(new THREE.Vector2())
+  const groundPlaneRef = useRef<THREE.Mesh | null>(null)
+  
+  const toolMode = useAppStore((state) => state.toolMode)
+  const addTextBox = useAppStore((state) => state.addTextBox)
+  
+  // Create invisible ground plane for raycasting
+  useEffect(() => {
+    const planeGeometry = new THREE.PlaneGeometry(1000, 1000)
+    const planeMaterial = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })
+    const plane = new THREE.Mesh(planeGeometry, planeMaterial)
+    plane.rotation.x = -Math.PI / 2
+    plane.position.y = 0
+    plane.name = 'groundPlane'
+    scene.add(plane)
+    groundPlaneRef.current = plane
+    
+    return () => {
+      scene.remove(plane)
+      planeGeometry.dispose()
+      planeMaterial.dispose()
+    }
+  }, [scene])
+  
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      // Only handle clicks when textbox tool is active
+      if (toolMode !== 'textbox') return
+      
+      // Prevent clicks on HTML elements (text boxes, buttons, inputs)
+      const target = event.target as HTMLElement
+      if (
+        target.tagName === 'INPUT' || 
+        target.tagName === 'TEXTAREA' || 
+        target.tagName === 'BUTTON' ||
+        target.closest('div[style*="padding"]') // Text box content
+      ) {
+        return
+      }
+      
+      // Only handle clicks directly on canvas (not on HTML overlays)
+      if (target !== gl.domElement) {
+        return
+      }
+      
+      // Get canvas bounding rect
+      const rect = gl.domElement.getBoundingClientRect()
+      
+      // Calculate mouse position in normalized device coordinates
+      mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+      mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+      
+      // Update raycaster
+      raycaster.current.setFromCamera(mouse.current, camera)
+      
+      // Intersect with ground plane
+      if (groundPlaneRef.current) {
+        const intersects = raycaster.current.intersectObject(groundPlaneRef.current)
+        
+        if (intersects.length > 0) {
+          const point = intersects[0].point
+          console.log('✅ Text box placement at:', point)
+          
+          // Create new text box at intersection point
+          const textBoxId = `textbox-${Date.now()}`
+          const newTextBox = {
+            id: textBoxId,
+            position: [point.x, 0.1, point.z] as [number, number, number], // Fixed Y at 0.1
+            text: 'New Text Box',
+            textColor: '#000000',
+            backgroundColor: '#ffffff',
+            backgroundTransparent: false,
+            fontSize: 16,
+            createdAt: new Date(),
+          }
+          
+          addTextBox(newTextBox)
+          saveTextBox(newTextBox).catch(console.error)
+          
+          // Switch back to select mode after placing
+          const setToolMode = useAppStore.getState().setToolMode
+          setToolMode('select')
+        }
+      }
+    }
+    
+    // Use capture phase to catch clicks before they reach HTML elements
+    gl.domElement.addEventListener('click', handleClick, true)
+    return () => {
+      gl.domElement.removeEventListener('click', handleClick, true)
+    }
+  }, [toolMode, camera, gl, addTextBox, scene])
+  
+  return null
 }
 
 function SceneContent({
@@ -23,6 +126,7 @@ function SceneContent({
 }) {
   const viewMode = useAppStore((state) => state.viewMode)
   const models = useAppStore((state) => state.models)
+  const textBoxes = useAppStore((state) => state.textBoxes)
 
   return (
     <>
@@ -93,6 +197,14 @@ function SceneContent({
             }
             return null
           })}
+
+      {/* Text Boxes */}
+      {Object.keys(textBoxes).map((id) => (
+        <TextBox key={id} id={id} />
+      ))}
+
+      {/* Canvas Click Handler */}
+      <CanvasClickHandler />
 
       {/* Controls - only in 3D mode */}
       {viewMode === "3d" && <OrbitControls makeDefault enableDamping dampingFactor={0.05} />}
