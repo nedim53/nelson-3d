@@ -36,23 +36,15 @@ export default function ModelItem({ url, id }: Props) {
   const [previousPosition] = useState<THREE.Vector3>(new THREE.Vector3())
   const [previousRotation] = useState<THREE.Euler>(new THREE.Euler())
   
-  // Store original colors for collision feedback
   const originalColorsRef = useRef<Map<THREE.Material, THREE.Color>>(new Map())
   
-  // Load GLTF/GLB model - useGLTF handles loading with Suspense
-  // Note: useGLTF supports both .gltf and .glb formats
   const gltf = useGLTF(url, true)
   
-  // Log when model loads
   useEffect(() => {
     if (gltf?.scene) {
-      console.log(`✅ Model ${id} loaded successfully from ${url}`)
-      console.log(`   Scene children:`, gltf.scene.children.length)
-      console.log(`   Scene position:`, gltf.scene.position)
     }
   }, [gltf?.scene, id, url])
   
-  // Debounced save function
   const debouncedSave = useCallback(
     createDebouncedFunction((modelId: string, data: { position: number[]; rotation: number[] }) => {
       saveModelState(modelId, data).catch(console.error)
@@ -60,7 +52,6 @@ export default function ModelItem({ url, id }: Props) {
     []
   )
 
-  // Update model position/rotation from store
   useEffect(() => {
     if (ref.current && modelState) {
       ref.current.position.set(...modelState.position)
@@ -68,19 +59,16 @@ export default function ModelItem({ url, id }: Props) {
     }
   }, [modelState])
 
-  // Save mesh reference to store when ready (only once)
   useEffect(() => {
     if (ref.current && clonedScene.current) {
       setModelMesh(id, ref.current)
     }
   }, [id, setModelMesh, isReady])
 
-  // Check collision and update visual feedback (with position and rotation)
   const checkCollisionAndUpdateFeedback = useCallback(
-    (position: THREE.Vector3, rotation: THREE.Euler): boolean => {
+    (position: THREE.Vector3 | [number, number, number], rotation: THREE.Euler | [number, number, number]): boolean => {
       if (!ref.current) return false
       
-      // Prepare mesh data for all models
       const allMeshes: Record<string, { 
         mesh: THREE.Object3D, 
         position: [number, number, number], 
@@ -97,11 +85,18 @@ export default function ModelItem({ url, id }: Props) {
         }
       }
       
-      // Check if the proposed position/rotation would cause collision
+      // Normalize position and rotation to arrays
+      const posArray: [number, number, number] = Array.isArray(position) 
+        ? position 
+        : [position.x, position.y, position.z]
+      const rotArray: [number, number, number] = Array.isArray(rotation)
+        ? rotation
+        : [rotation.x, rotation.y, rotation.z]
+      
       const hasCollision = wouldCollide(
         ref.current,
-        [position.x, position.y, position.z],
-        [rotation.x, rotation.y, rotation.z],
+        posArray,
+        rotArray,
         id,
         allMeshes
       )
@@ -112,7 +107,6 @@ export default function ModelItem({ url, id }: Props) {
     }, [allModels, id, isDragging]
   )
 
-  // Handle transform change
   const handleChange = useCallback(() => {
     if (!ref.current || !transformControlsRef.current) return
     
@@ -124,7 +118,6 @@ export default function ModelItem({ url, id }: Props) {
       ref.current.position.y = position.y
     }
 
-    // Keep above ground: if any part dips below y=0, lift object up
     const ensureAboveGround = (obj: THREE.Object3D) => {
       const box = new THREE.Box3().setFromObject(obj)
       const minY = box.min.y
@@ -136,32 +129,91 @@ export default function ModelItem({ url, id }: Props) {
     }
     ensureAboveGround(ref.current)
     
-    // Check for collision and update feedback (now includes rotation)
-    if (checkCollisionAndUpdateFeedback(position, rotation)) {
-      // Rollback to previous position AND rotation
-      ref.current.position.copy(previousPosition)
-      ref.current.rotation.copy(previousRotation)
-      return
+    // Check collision with per-axis blocking
+    // Try each axis separately to allow movement in other directions
+    let finalPosition = position.clone()
+    let finalRotation = rotation.clone()
+    
+    // Check rotation first - if rotation causes collision, block it
+    const rotArray: [number, number, number] = [rotation.x, rotation.y, rotation.z]
+    const prevRotArray: [number, number, number] = [previousRotation.x, previousRotation.y, previousRotation.z]
+    
+    if (checkCollisionAndUpdateFeedback(previousPosition, rotArray)) {
+      // Rotation causes collision, try each rotation axis separately
+      // X rotation
+      const testRotX: [number, number, number] = [rotation.x, prevRotArray[1], prevRotArray[2]]
+      if (checkCollisionAndUpdateFeedback(previousPosition, testRotX)) {
+        finalRotation.x = previousRotation.x
+      } else {
+        finalRotation.x = rotation.x
+      }
+      
+      // Y rotation
+      const testRotY: [number, number, number] = [finalRotation.x, rotation.y, prevRotArray[2]]
+      if (checkCollisionAndUpdateFeedback(previousPosition, testRotY)) {
+        finalRotation.y = previousRotation.y
+      } else {
+        finalRotation.y = rotation.y
+      }
+      
+      // Z rotation
+      const testRotZ: [number, number, number] = [finalRotation.x, finalRotation.y, rotation.z]
+      if (checkCollisionAndUpdateFeedback(previousPosition, testRotZ)) {
+        finalRotation.z = previousRotation.z
+      } else {
+        finalRotation.z = rotation.z
+      }
+    } else {
+      // No collision with new rotation, allow it
+      finalRotation.copy(rotation)
     }
     
-    // Update previous position/rotation
-    previousPosition.copy(position)
-    previousRotation.copy(rotation)
+    // Check each position axis separately with final rotation
+    const finalRotArray: [number, number, number] = [finalRotation.x, finalRotation.y, finalRotation.z]
     
-    // Update store
+    // X axis
+    const testPosX: [number, number, number] = [position.x, previousPosition.y, previousPosition.z]
+    if (checkCollisionAndUpdateFeedback(testPosX, finalRotArray)) {
+      finalPosition.x = previousPosition.x
+    } else {
+      finalPosition.x = position.x
+    }
+    
+    // Y axis
+    const testPosY: [number, number, number] = [finalPosition.x, position.y, previousPosition.z]
+    if (checkCollisionAndUpdateFeedback(testPosY, finalRotArray)) {
+      finalPosition.y = previousPosition.y
+    } else {
+      finalPosition.y = position.y
+    }
+    
+    // Z axis
+    const testPosZ: [number, number, number] = [finalPosition.x, finalPosition.y, position.z]
+    if (checkCollisionAndUpdateFeedback(testPosZ, finalRotArray)) {
+      finalPosition.z = previousPosition.z
+    } else {
+      finalPosition.z = position.z
+    }
+    
+    // Apply the final position and rotation
+    ref.current.position.copy(finalPosition)
+    ref.current.rotation.copy(finalRotation)
+    
+    // Update previous position/rotation
+    previousPosition.copy(finalPosition)
+    previousRotation.copy(finalRotation)
+    
     updateModel(id, {
-      position: [position.x, position.y, position.z],
-      rotation: [rotation.x, rotation.y, rotation.z],
+      position: [finalPosition.x, finalPosition.y, finalPosition.z],
+      rotation: [finalRotation.x, finalRotation.y, finalRotation.z],
     })
     
-    // Save to Firestore (debounced)
     debouncedSave(id, {
-      position: [position.x, position.y, position.z],
-      rotation: [rotation.x, rotation.y, rotation.z],
+      position: [finalPosition.x, finalPosition.y, finalPosition.z],
+      rotation: [finalRotation.x, finalRotation.y, finalRotation.z],
     })
   }, [id, updateModel, debouncedSave, checkCollisionAndUpdateFeedback, previousPosition, previousRotation, verticalMoveMode])
 
-  // Handle drag start
   const handleDragStart = useCallback(() => {
     if (ref.current) {
       if (controls) controls.enabled = false
@@ -172,17 +224,14 @@ export default function ModelItem({ url, id }: Props) {
     }
   }, [previousPosition, previousRotation, controls])
 
-  // Handle drag end
   const handleDragEnd = useCallback(() => {
     handleChange()
     setIsDragging(false)
     setIsColliding(false)
-    // Save state to history for undo/redo
     saveCurrentState()
     if (controls) controls.enabled = true
   }, [handleChange, controls, saveCurrentState])
 
-  // Clone the scene to avoid sharing between instances
   const clonedScene = useRef<THREE.Group | null>(null)
   
   useEffect(() => {
@@ -190,14 +239,12 @@ export default function ModelItem({ url, id }: Props) {
       try {
         clonedScene.current = gltf.scene.clone()
         
-        // Center and normalize model (optional - comment out if you want original positioning)
         const box = new THREE.Box3().setFromObject(clonedScene.current)
         if (!box.isEmpty()) {
           const center = box.getCenter(new THREE.Vector3())
           clonedScene.current.position.sub(center)
         }
         
-        console.log(`✅ Model ${id} processed and ready`)
         setIsReady(true)
       } catch (error: any) {
         console.error(`❌ Error processing model ${id}:`, error)
@@ -206,7 +253,6 @@ export default function ModelItem({ url, id }: Props) {
     }
   }, [gltf?.scene, id])
 
-  // Apply red tint to materials when colliding (store original colors)
   useEffect(() => {
     if (!clonedScene.current) return
     
@@ -217,12 +263,10 @@ export default function ModelItem({ url, id }: Props) {
           const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
           materials.forEach((mat) => {
             if ('color' in mat && mat instanceof THREE.MeshStandardMaterial) {
-              // Store original color on first access
               if (!originalColorsRef.current.has(mat)) {
                 originalColorsRef.current.set(mat, mat.color.clone())
               }
               
-              // Apply red tint when colliding, restore original when not
               if (isColliding) {
                 mat.color.set('#DC2626')
               } else {
@@ -243,7 +287,6 @@ export default function ModelItem({ url, id }: Props) {
   }
 
   if (!gltf?.scene || !clonedScene.current || !isReady) {
-    // Model is still loading - show nothing (Suspense will handle loading state)
     return null
   }
 

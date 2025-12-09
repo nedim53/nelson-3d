@@ -7,6 +7,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useAppStore } from '../utils/store'
 import { saveTextBox } from '../lib/firestoreApi'
 import { createDebouncedFunction } from '../utils/debounce'
+import { wouldTextBoxCollide } from '../utils/collisionDetection'
 
 type Props = {
   id: string
@@ -22,12 +23,12 @@ export default function TextBox({ id }: Props) {
   const updateTextBox = useAppStore((state) => state.updateTextBox)
   const selectedTextBoxId = useAppStore((state) => state.selectedTextBoxId)
   const setSelectedTextBoxId = useAppStore((state) => state.setSelectedTextBoxId)
+  const allModels = useAppStore((state) => state.models)
   const { camera, gl, raycaster, controls } = useThree()
   const orbitControls = controls as unknown as OrbitControlsImpl | null
   
   const isSelected = selectedTextBoxId === id
   
-  // Debounced save - created once, never recreated
   const debouncedSaveRef = useRef(
     createDebouncedFunction(
       async (textBoxId: string, data: any) => {
@@ -42,14 +43,12 @@ export default function TextBox({ id }: Props) {
     )
   )
   
-  // Set position from store - ONLY when not dragging and position changed
   useEffect(() => {
     if (!ref.current || !textBoxData?.position || isDraggingRef.current || isDragging) return
     
     const [x, y, z] = textBoxData.position
     const currentPos = ref.current.position
     
-    // Only update if position is significantly different
     if (
       Math.abs(currentPos.x - x) > 0.001 ||
       Math.abs(currentPos.y - y) > 0.001 ||
@@ -59,30 +58,25 @@ export default function TextBox({ id }: Props) {
     }
   }, [textBoxData?.position, isDragging])
   
-  // Save position to store and Firestore
   const savePosition = useCallback(() => {
     if (!ref.current || !textBoxData) return
     
     const position = ref.current.position.clone()
     
-    // Keep above ground
     if (position.y < 0) {
       position.y = 0
       ref.current.position.y = 0
     }
     
-    // Update store
     updateTextBox(id, {
       position: [position.x, position.y, position.z],
     })
     
-    // Save to Firestore
     debouncedSaveRef.current(id, {
       position: [position.x, position.y, position.z],
     })
   }, [id, textBoxData, updateTextBox])
   
-  // Handle click to select - prevent event bubbling
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
@@ -91,14 +85,12 @@ export default function TextBox({ id }: Props) {
     }
   }, [id, setSelectedTextBoxId, isDragging])
   
-  // Drag and drop handler for drag handle - same logic as models
   const handleDragHandleMouseDown = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
     
     if (!ref.current) return
     
-    // Disable camera controls during drag (same as models)
     if (orbitControls) {
       orbitControls.enabled = false
     }
@@ -114,7 +106,7 @@ export default function TextBox({ id }: Props) {
     )
     
     const handleMouseMove = (event: MouseEvent) => {
-      if (!ref.current) return
+      if (!ref.current || !textBoxData) return
       
       const rect = gl.domElement.getBoundingClientRect()
       const mouse = new THREE.Vector2(
@@ -124,13 +116,43 @@ export default function TextBox({ id }: Props) {
       
       raycaster.setFromCamera(mouse, camera)
       
-      // Create a plane at the current Y position
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -ref.current.position.y)
       const intersection = new THREE.Vector3()
       raycaster.ray.intersectPlane(plane, intersection)
       
       if (intersection) {
-        ref.current.position.set(intersection.x, ref.current.position.y, intersection.z)
+        const newPosition: [number, number, number] = [intersection.x, ref.current.position.y, intersection.z]
+        
+        // Prepare mesh data for all models
+        const allMeshes: Record<string, { 
+          mesh: THREE.Object3D, 
+          position: [number, number, number], 
+          rotation: [number, number, number] 
+        }> = {}
+        
+        for (const [modelId, modelData] of Object.entries(allModels)) {
+          if (modelData.mesh) {
+            allMeshes[modelId] = {
+              mesh: modelData.mesh,
+              position: modelData.position,
+              rotation: modelData.rotation
+            }
+          }
+        }
+        
+        // Check collision with 3D models
+        const textLength = textBoxData.text?.length || 20
+        const hasCollision = wouldTextBoxCollide(
+          newPosition,
+          textBoxData.fontSize || 16,
+          textLength,
+          allMeshes
+        )
+        
+        // Only update position if no collision
+        if (!hasCollision) {
+          ref.current.position.set(intersection.x, ref.current.position.y, intersection.z)
+        }
       }
     }
     
@@ -140,7 +162,6 @@ export default function TextBox({ id }: Props) {
       savePosition()
       dragStartPosRef.current = null
       
-      // Re-enable camera controls after drag (same as models)
       if (orbitControls) {
         orbitControls.enabled = true
       }
@@ -151,9 +172,8 @@ export default function TextBox({ id }: Props) {
     
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
-  }, [camera, raycaster, gl, savePosition, orbitControls])
+  }, [camera, raycaster, gl, savePosition, orbitControls, textBoxData, allModels])
   
-  // Memoize text box content to prevent re-renders - stable reference
   const textBoxContent = useMemo(() => {
     if (!textBoxData) return null
     
@@ -182,7 +202,6 @@ export default function TextBox({ id }: Props) {
         onClick={handleClick}
       >
         {text || 'Click to edit'}
-        {/* Drag handle icon */}
         <div
           onMouseDown={handleDragHandleMouseDown}
           style={{

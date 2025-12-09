@@ -20,12 +20,11 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
 
   return (
     <div
-      className={`fixed left-0 top-0 h-full bg-gradient-to-b from-white to-gray-50 shadow-2xl transition-all duration-300 z-50 flex flex-col border-r border-gray-200 ${
+      className={`fixed left-0 bg-gradient-to-b from-white to-gray-50 shadow-2xl transition-all duration-300 z-50 flex flex-col border-r border-gray-200 ${
         isExpanded ? 'w-80' : 'w-14'
       }`}
-      style={{ top: '73px' }}
+      style={{ top: '73px', bottom: '0', height: 'calc(100vh - 73px)' }}
     >
-      {/* Header with minimize/expand button */}
       <div className="bg-gradient-to-r from-[#001B3D] to-[#002b5d] px-5 py-4 flex items-center justify-between flex-shrink-0 shadow-md">
         {isExpanded && (
           <div className="flex items-center gap-3">
@@ -46,10 +45,8 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
         </button>
       </div>
 
-      {/* Content */}
       {isExpanded && (
         <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-white">
-          {/* View Mode Toggle */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 shadow-sm">
             <label className="block text-sm font-semibold text-[#2D3748] mb-3 flex items-center gap-2" style={{ fontFamily: "Montserrat" }}>
               <span className="text-lg">👁️</span>
@@ -81,43 +78,28 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
             </div>
           </div>
 
-          {/* Transform Mode Toggle */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 shadow-sm">
             <label className="block text-sm font-semibold text-[#2D3748] mb-3 flex items-center gap-2" style={{ fontFamily: "Montserrat" }}>
               <span className="text-lg">🔄</span>
               Transform Mode
             </label>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setTransformMode("translate")}
-                className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.02] ${
-                  transformMode === "translate" 
-                    ? "bg-gradient-to-r from-[#001B3D] to-[#002b5d] text-white" 
-                    : "bg-white text-[#2D3748] hover:bg-gray-50 border-2 border-gray-200"
-                }`}
-                style={{ fontFamily: "Montserrat" }}
-              >
-                ↔ Move
-              </button>
-              <button
-                onClick={() => setTransformMode("rotate")}
-                className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.02] ${
-                  transformMode === "rotate" 
-                    ? "bg-gradient-to-r from-[#001B3D] to-[#002b5d] text-white" 
-                    : "bg-white text-[#2D3748] hover:bg-gray-50 border-2 border-gray-200"
-                }`}
-                style={{ fontFamily: "Montserrat" }}
-              >
-                ↻ Rotate
-              </button>
-            </div>
+            <button
+              onClick={() => setTransformMode("translate")}
+              className={`w-full px-4 py-3 rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.02] ${
+                transformMode === "translate" 
+                  ? "bg-gradient-to-r from-[#001B3D] to-[#002b5d] text-white" 
+                  : "bg-white text-[#2D3748] hover:bg-gray-50 border-2 border-gray-200"
+              }`}
+              style={{ fontFamily: "Montserrat" }}
+            >
+              ↔ Move
+            </button>
             <p className="text-xs text-gray-500 mt-3 flex items-center gap-1" style={{ fontFamily: "Montserrat" }}>
               <span>💡</span>
-              {transformMode === "translate" ? "Click and drag arrows to move" : "Click and drag circles to rotate"}
+              Click and drag arrows to move
             </p>
           </div>
 
-          {/* Vertical move toggle (only show in translate mode) */}
           {transformMode === "translate" && (
             <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 shadow-sm">
               <label className="block text-sm font-semibold text-[#2D3748] mb-3 flex items-center gap-2" style={{ fontFamily: "Montserrat" }}>
@@ -142,7 +124,6 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
             </div>
           )}
 
-          {/* Undo/Redo Controls */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 shadow-sm">
             <label className="block text-sm font-semibold text-[#2D3748] mb-3 flex items-center gap-2" style={{ fontFamily: "Montserrat" }}>
               <span className="text-lg">⏪</span>
@@ -176,7 +157,6 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
             </div>
           </div>
 
-          {/* Instructions */}
           <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-4 border border-blue-100 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-lg">📖</span>
@@ -206,7 +186,6 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
             </div>
           </div>
 
-          {/* Rotation Controls */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <span className="text-lg">🎯</span>
@@ -223,7 +202,6 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
         </div>
       )}
 
-      {/* Minimized state indicator */}
       {!isExpanded && (
         <div className="flex-1 flex items-center justify-center">
           <div className="transform -rotate-90 whitespace-nowrap">

@@ -3,9 +3,14 @@ import { useState } from 'react'
 import { useAppStore } from '../utils/store'
 import TextBoxEditor from './TextBoxEditor'
 import { deleteTextBox } from '../lib/firestoreApi'
+import ConfirmDeleteModal from './ConfirmDeleteModal'
 
 export default function TextBoxSidebar() {
   const [isExpanded, setIsExpanded] = useState(true)
+  const [deleteModalState, setDeleteModalState] = useState<{ isOpen: boolean; textBoxId: string | null }>({
+    isOpen: false,
+    textBoxId: null
+  })
   const toolMode = useAppStore((state) => state.toolMode)
   const setToolMode = useAppStore((state) => state.setToolMode)
   const selectedTextBoxId = useAppStore((state) => state.selectedTextBoxId)
@@ -19,7 +24,12 @@ export default function TextBoxSidebar() {
   }
 
   const handleDeleteTextBox = (id: string) => {
-    if (confirm('Are you sure you want to delete this text box?')) {
+    setDeleteModalState({ isOpen: true, textBoxId: id })
+  }
+
+  const confirmDelete = () => {
+    if (deleteModalState.textBoxId) {
+      const id = deleteModalState.textBoxId
       removeTextBox(id)
       if (selectedTextBoxId === id) {
         setSelectedTextBoxId(null)
@@ -30,10 +40,10 @@ export default function TextBoxSidebar() {
 
   return (
     <div
-      className={`fixed right-0 top-0 h-full bg-gradient-to-b from-white to-gray-50 shadow-2xl transition-all duration-300 z-50 flex flex-col border-l border-gray-200 ${
+      className={`fixed right-0 bg-gradient-to-b from-white to-gray-50 shadow-2xl transition-all duration-300 z-50 flex flex-col border-l border-gray-200 ${
         isExpanded ? 'w-96' : 'w-14'
       }`}
-      style={{ top: '73px' }}
+      style={{ top: '73px', bottom: '0', height: 'calc(100vh - 73px)' }}
     >
       {/* Header with minimize/expand button */}
       <div className="bg-gradient-to-r from-[#001B3D] to-[#002b5d] px-5 py-4 flex items-center justify-between flex-shrink-0 shadow-md">
@@ -59,10 +69,8 @@ export default function TextBoxSidebar() {
         </button>
       </div>
 
-      {/* Content */}
       {isExpanded && (
         <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-white">
-          {/* Insert Text Box Button */}
           <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 shadow-sm">
             <label
               className="block text-sm font-semibold text-[#2D3748] mb-3 flex items-center gap-2"
@@ -80,7 +88,7 @@ export default function TextBoxSidebar() {
               }`}
               style={{ fontFamily: 'Montserrat' }}
             >
-              {toolMode === 'textbox' ? '✓ Click on canvas to place' : '📝 Umetni Text Box'}
+              {toolMode === 'textbox' ? '✓ Click on canvas to place' : '📝 Insert Text Box'}
             </button>
             {toolMode === 'textbox' && (
               <p className="text-xs text-gray-500 mt-3 flex items-center gap-1" style={{ fontFamily: 'Montserrat' }}>
@@ -90,7 +98,6 @@ export default function TextBoxSidebar() {
             )}
           </div>
 
-          {/* Text Box Editor - Only show if one is selected */}
           {selectedTextBoxId && textBoxes[selectedTextBoxId] && (
             <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-4 border border-blue-100 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
@@ -103,7 +110,6 @@ export default function TextBoxSidebar() {
             </div>
           )}
 
-          {/* Text Boxes List */}
           {Object.keys(textBoxes).length > 0 && (
             <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 shadow-sm">
               <label
@@ -162,7 +168,6 @@ export default function TextBoxSidebar() {
             </div>
           )}
 
-          {/* Empty state */}
           {Object.keys(textBoxes).length === 0 && (
             <div
               className="text-center py-12 px-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100"
@@ -170,13 +175,12 @@ export default function TextBoxSidebar() {
             >
               <div className="text-4xl mb-3">📝</div>
               <p className="text-sm font-semibold text-gray-600 mb-2">No text boxes yet</p>
-              <p className="text-xs text-gray-500">Click "Umetni Text Box" to create one</p>
+              <p className="text-xs text-gray-500">Click "Insert Text Box" to create one</p>
             </div>
           )}
         </div>
       )}
 
-      {/* Minimized state indicator */}
       {!isExpanded && (
         <div className="flex-1 flex items-center justify-center">
           <div className="transform -rotate-90 whitespace-nowrap">
@@ -186,6 +190,14 @@ export default function TextBoxSidebar() {
           </div>
         </div>
       )}
+      
+      <ConfirmDeleteModal
+        isOpen={deleteModalState.isOpen}
+        onClose={() => setDeleteModalState({ isOpen: false, textBoxId: null })}
+        onConfirm={confirmDelete}
+        title="Delete Text Box"
+        message="Are you sure you want to delete this text box? This action cannot be undone."
+      />
     </div>
   )
 }

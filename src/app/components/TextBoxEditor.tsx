@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useAppStore } from '../utils/store'
 import { saveTextBox, deleteTextBox } from '../lib/firestoreApi'
 import { createDebouncedFunction } from '../utils/debounce'
+import ConfirmDeleteModal from './ConfirmDeleteModal'
 
 type Props = {
   textBoxId: string
@@ -18,8 +19,8 @@ export default function TextBoxEditor({ textBoxId }: Props) {
   const [localBackgroundColor, setLocalBackgroundColor] = useState('#ffffff')
   const [localBackgroundTransparent, setLocalBackgroundTransparent] = useState(false)
   const [localFontSize, setLocalFontSize] = useState(16)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   
-  // Debounced save function
   const debouncedSave = useMemo(
     () => createDebouncedFunction(
       async (data: any) => {
@@ -46,7 +47,6 @@ export default function TextBoxEditor({ textBoxId }: Props) {
   
   if (!textBox) return null
   
-  // Auto-save on change
   const handleTextChange = (newText: string) => {
     setLocalText(newText)
     updateTextBox(textBoxId, { text: newText })
@@ -78,10 +78,8 @@ export default function TextBoxEditor({ textBoxId }: Props) {
   }
   
   const handleDelete = async () => {
-    if (confirm('Are you sure you want to delete this text box?')) {
-      removeTextBox(textBoxId)
-      await deleteTextBox(textBoxId)
-    }
+    removeTextBox(textBoxId)
+    await deleteTextBox(textBoxId)
   }
   
   return (
@@ -185,7 +183,7 @@ export default function TextBoxEditor({ textBoxId }: Props) {
         {/* Actions */}
         <div className="flex gap-3 pt-4 border-t border-gray-200">
           <button
-            onClick={handleDelete}
+            onClick={() => setShowDeleteModal(true)}
             className="w-full px-4 py-2.5 bg-[#C41E3A] text-white rounded font-medium transition-all duration-200 hover:bg-[#a01a2e]"
             style={{ fontFamily: "Montserrat" }}
           >
@@ -196,6 +194,14 @@ export default function TextBoxEditor({ textBoxId }: Props) {
           Changes are saved automatically
         </p>
       </div>
+      
+      <ConfirmDeleteModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDelete}
+        title="Delete Text Box"
+        message="Are you sure you want to delete this text box? This action cannot be undone."
+      />
     </div>
   )
 }
