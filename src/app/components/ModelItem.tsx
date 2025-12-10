@@ -8,7 +8,6 @@ import { saveModelState } from '../lib/firestoreApi'
 import { createDebouncedFunction } from '../utils/debounce'
 import { wouldCollide } from '../utils/collisionDetection'
 import CollisionTooltip from './CollisionTooltip'
-import { useUndoRedoContext } from '../contexts/UndoRedoContext'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 type Props = {
@@ -31,7 +30,6 @@ export default function ModelItem({ url, id }: Props) {
   const initialGroundYRef = useRef(0)
   const [isColliding, setIsColliding] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const { saveCurrentState } = useUndoRedoContext()
   
   const [previousPosition] = useState<THREE.Vector3>(new THREE.Vector3())
   const [previousRotation] = useState<THREE.Euler>(new THREE.Euler())
@@ -228,9 +226,8 @@ export default function ModelItem({ url, id }: Props) {
     handleChange()
     setIsDragging(false)
     setIsColliding(false)
-    saveCurrentState()
     if (controls) controls.enabled = true
-  }, [handleChange, controls, saveCurrentState])
+  }, [handleChange, controls])
 
   const clonedScene = useRef<THREE.Group | null>(null)
   

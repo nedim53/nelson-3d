@@ -6,7 +6,6 @@ import ControlsUI from "./components/ControlsUI"
 import TextBoxSidebar from "./components/TextBoxSidebar"
 import { useAppStore } from "./utils/store"
 import { loadModelState, loadAllTextBoxes } from "./lib/firestoreApi"
-import { UndoRedoProvider } from "./contexts/UndoRedoContext"
 
 const USE_SIMPLE_MODELS = false
 
@@ -186,8 +185,7 @@ export default function Home() {
   }
 
   return (
-    <UndoRedoProvider>
-      <div className="relative w-full h-screen overflow-hidden flex flex-col">
+    <div className="relative w-full h-screen overflow-hidden flex flex-col">
         <header className="bg-[#001B3D] text-white px-6 py-4 shadow-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <h1 className="text-2xl font-bold tracking-wide" style={{ fontFamily: "Montserrat" }}>
@@ -245,6 +243,5 @@ export default function Home() {
         </div>
       )}
       </div>
-    </UndoRedoProvider>
   )
 }

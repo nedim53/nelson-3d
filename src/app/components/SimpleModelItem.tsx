@@ -8,7 +8,6 @@ import { saveModelState } from '../lib/firestoreApi'
 import { createDebouncedFunction } from '../utils/debounce'
 import { wouldCollide } from '../utils/collisionDetection'
 import CollisionTooltip from './CollisionTooltip'
-import { useUndoRedoContext } from '../contexts/UndoRedoContext'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 type Props = {
@@ -29,7 +28,6 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
   const transformMode = useAppStore((state) => state.transformMode)
   const [isColliding, setIsColliding] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const { saveCurrentState } = useUndoRedoContext()
   
   const previousPositionRef = useRef<THREE.Vector3>(new THREE.Vector3())
   const previousRotationRef = useRef<THREE.Euler>(new THREE.Euler())
@@ -161,10 +159,8 @@ export default function SimpleModelItem({ id, shape, color = '#3b82f6' }: Props)
     handleChange()
     setIsDragging(false)
     setIsColliding(false)
-    // Save state to history for undo/redo
-    saveCurrentState()
     if (controls) controls.enabled = true
-  }, [handleChange, controls, saveCurrentState])
+  }, [handleChange, controls])
 
   if (!modelState) {
     return null

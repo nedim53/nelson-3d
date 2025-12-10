@@ -2,7 +2,6 @@
 import { useState } from "react"
 import { useAppStore } from "../utils/store"
 import RotationControls from "./RotationControls"
-import { useUndoRedoContext } from "../contexts/UndoRedoContext"
 
 type ControlsUIProps = {
   modelIds: string[]
@@ -16,7 +15,6 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
   const setTransformMode = useAppStore((state) => state.setTransformMode)
   const verticalMoveMode = useAppStore((state) => state.verticalMoveMode)
   const setVerticalMoveMode = useAppStore((state) => state.setVerticalMoveMode)
-  const { undo, redo, canUndo, canRedo } = useUndoRedoContext()
 
   return (
     <div
@@ -123,39 +121,6 @@ export default function ControlsUI({ modelIds }: ControlsUIProps) {
               </p>
             </div>
           )}
-
-          <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 shadow-sm">
-            <label className="block text-sm font-semibold text-[#2D3748] mb-3 flex items-center gap-2" style={{ fontFamily: "Montserrat" }}>
-              <span className="text-lg">⏪</span>
-              History
-            </label>
-            <div className="flex gap-3">
-              <button
-                onClick={undo}
-                disabled={!canUndo}
-                className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.02] ${
-                  canUndo
-                    ? "bg-gradient-to-r from-[#001B3D] to-[#002b5d] text-white hover:from-[#002b5d] hover:to-[#003d7a]"
-                    : "bg-gray-100 text-gray-400 cursor-not-allowed border-2 border-gray-200"
-                }`}
-                style={{ fontFamily: "Montserrat" }}
-              >
-                ↶ Undo
-              </button>
-              <button
-                onClick={redo}
-                disabled={!canRedo}
-                className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.02] ${
-                  canRedo
-                    ? "bg-gradient-to-r from-[#001B3D] to-[#002b5d] text-white hover:from-[#002b5d] hover:to-[#003d7a]"
-                    : "bg-gray-100 text-gray-400 cursor-not-allowed border-2 border-gray-200"
-                }`}
-                style={{ fontFamily: "Montserrat" }}
-              >
-                ↷ Redo
-              </button>
-            </div>
-          </div>
 
           <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-4 border border-blue-100 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
